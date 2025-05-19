@@ -7,8 +7,9 @@ from typing import TypeVar, Union
 from sqlalchemy import Table
 from sqlalchemy.orm import FromStatement
 from sqlalchemy.orm.util import _ORMJoin
-from sqlalchemy.sql import Alias, CompoundSelect, Executable, Join, Select, Subquery, TableClause
+from sqlalchemy.sql import Alias, CompoundSelect, Executable, Join, Select, Subquery, TableClause, FromClause
 from sqlalchemy.sql.elements import TextClause
+from sqlalchemy.sql.selectable import CTE
 
 from sqlalchemy_easy_softdelete.hook import IgnoredTable
 
@@ -109,19 +110,28 @@ class SoftDeleteQueryRewriter:
         if isinstance(join_obj.right, (Join, _ORMJoin)):
             stmt = self.rewrite_from_orm_join(stmt, join_obj.right)
 
+        # Handle Alias cases
+        if isinstance(join_obj.right, Alias):
+            if isinstance(join_obj.right.element, Table):
+                stmt = self.rewrite_from(stmt, join_obj.right)
+
+        if isinstance(join_obj.left, Alias):
+            if isinstance(join_obj.left.element, Table):
+                stmt = self.rewrite_from(stmt, join_obj.left)
+
         # Normal cases - Tables
         if isinstance(join_obj.left, Table):
-            stmt = self.rewrite_from_table(stmt, join_obj.left)
+            stmt = self.rewrite_from(stmt, join_obj.left)
 
         if isinstance(join_obj.right, Table):
-            stmt = self.rewrite_from_table(stmt, join_obj.right)
+            stmt = self.rewrite_from(stmt, join_obj.right)
 
         return stmt
 
     def analyze_from(self, stmt: Select, from_obj) -> Statement:
         """Analyze the FROMS of a Select to determine possible soft-delete rewritable tables."""
         if isinstance(from_obj, Table):
-            return self.rewrite_from_table(stmt, from_obj)
+            return self.rewrite_from(stmt, from_obj)
 
         if isinstance(from_obj, (Join, _ORMJoin)):
             # _ORMJOIN/Join contains information about two things: 'left' and 'right'. Check both.
@@ -141,19 +151,33 @@ class SoftDeleteQueryRewriter:
                 self.rewrite_element(from_obj.element)
                 return stmt
 
+            if isinstance(from_obj.element, Table):
+                self.rewrite_from(stmt, from_obj)
+                return stmt
+
             raise NotImplementedError(
                 f'Unsupported object "{(type(from_obj.element))}" inside Alias in ' f"statement.froms"
             )
 
+        if isinstance(from_obj, CTE):
+            from_obj.element = self.rewrite_select(from_obj.element)
+            return stmt
+
         raise NotImplementedError(f'Unsupported object "{(type(from_obj))}" in statement.froms')
 
-    def rewrite_from_table(self, stmt: Select, table: Table) -> Select:
+    def rewrite_from(self, stmt: Select, item: FromClause) -> Select:
         """
         (possibly) Rewrite a Select based on whether the Table contains the soft-delete field or not.
 
         Ignore tables named like the ignore_tabl
 
         """
+        if isinstance(item, Table):
+            table = item
+        elif isinstance(item, Alias):
+            table = item.element
+        else:
+            raise NotImplementedError(f'Unsupported object "{(type(table))}" in rewrite_from')
         # Early return if enabled tables are set but none match the table
         if self.enabled_tables and not any(enabled.match_name(table) for enabled in self.enabled_tables):
             return stmt
@@ -162,7 +186,7 @@ class SoftDeleteQueryRewriter:
             return stmt
 
         # Try to retrieve the column object
-        column_obj = table.columns.get(self.deleted_field_name)
+        column_obj = item.columns.get(self.deleted_field_name)
 
         # If the column object is not found, return unchanged statement
         # Caveat: The automatic "bool(column_obj)" conversion actually returns a truthy value of False (?),
@@ -171,4 +195,4 @@ class SoftDeleteQueryRewriter:
             return stmt
 
         # Column found. Rewrite the statement with a filter condition in the soft-delete column
-        return stmt.filter(column_obj.is_(False))
+        return stmt.filter(column_obj.is_not(True))
