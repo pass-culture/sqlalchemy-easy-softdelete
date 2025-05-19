@@ -109,6 +109,15 @@ class SoftDeleteQueryRewriter:
         if isinstance(join_obj.right, (Join, _ORMJoin)):
             stmt = self.rewrite_from_orm_join(stmt, join_obj.right)
 
+        # Handle Alias cases
+        if isinstance(join_obj.right, Alias):
+            if isinstance(join_obj.right.element, Table):
+                stmt = self.rewrite_from_table(stmt, join_obj.right.element)
+
+        if isinstance(join_obj.left, Alias):
+            if isinstance(join_obj.left.element, Table):
+                stmt = self.rewrite_from_table(stmt, join_obj.left.element)
+
         # Normal cases - Tables
         if isinstance(join_obj.left, Table):
             stmt = self.rewrite_from_table(stmt, join_obj.left)
