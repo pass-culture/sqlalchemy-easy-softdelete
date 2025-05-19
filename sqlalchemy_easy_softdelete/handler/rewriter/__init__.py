@@ -171,4 +171,4 @@ class SoftDeleteQueryRewriter:
             return stmt
 
         # Column found. Rewrite the statement with a filter condition in the soft-delete column
-        return stmt.filter(column_obj.is_(None))
+        return stmt.filter(column_obj.is_not(True))

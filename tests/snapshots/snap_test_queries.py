@@ -77,5 +77,6 @@ snapshots['test_query_with_union_but_union_softdelete_disabled 1'] = [
     GenericRepr('<SDChild id=100205 deleted=True (parent_id=1002)>'),
     GenericRepr('<SDChild id=100206 deleted=True (parent_id=1002)>'),
     GenericRepr('<SDChild id=100207 deleted=True (parent_id=1002)>'),
-    GenericRepr('<SDChild id=100208 deleted=True (parent_id=1002)>')
+    GenericRepr('<SDChild id=100208 deleted=True (parent_id=1002)>'),
+    GenericRepr('<SDChild id=100209 deleted=True (parent_id=1002)>')
 ]

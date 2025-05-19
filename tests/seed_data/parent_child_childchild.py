@@ -1,15 +1,8 @@
-import datetime
 import random
 
 from sqlalchemy.orm import Session
 
 from tests.model import SDChild, SDChildChild, SDParent
-
-TEST_EPOCH = datetime.datetime(year=1985, month=8, day=4)
-
-
-def pseudorandom_date(max_days: int = 3650) -> datetime:
-    return TEST_EPOCH + datetime.timedelta(days=random.randint(0, max_days))
 
 
 def generate_parent_child_object_hierarchy(
@@ -20,7 +13,7 @@ def generate_parent_child_object_hierarchy(
 
     # Generate the Parent
     new_parent = SDParent(id=parent_id)
-    new_parent.deleted_at = pseudorandom_date() if parent_deleted else None
+    new_parent.deleted_at = True if parent_deleted else False
     s.add(new_parent)
     s.flush()
 
@@ -33,7 +26,7 @@ def generate_parent_child_object_hierarchy(
     for child_no, child_deleted in enumerate(children):
         new_child_id = parent_id * 100 + child_no
         new_child = SDChild(id=new_child_id, parent_id=new_parent.id)
-        new_child.deleted_at = pseudorandom_date() if child_deleted else None
+        new_child.deleted_at = True if child_deleted else False
         s.add(new_child)
         s.flush()
 
@@ -46,7 +39,7 @@ def generate_parent_child_object_hierarchy(
         for child_children_no, child_children_deleted in enumerate(child_children):
             sdchild_child_id = new_child_id * 100 + child_children_no
             new_child_child = SDChildChild(id=sdchild_child_id, child_id=new_child.id)
-            child_child_deleted = pseudorandom_date() if child_children_deleted else None
+            child_child_deleted = True if child_children_deleted else False
             new_child_child.deleted_at = child_child_deleted
             s.add(new_child_child)
             s.flush()

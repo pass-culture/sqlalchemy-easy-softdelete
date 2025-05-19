@@ -1,10 +1,9 @@
 """Functions related to dynamic generation of the soft-delete mixin."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Callable, Optional, Type
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, Boolean
 from sqlalchemy.sql.type_api import TypeEngine
 
 from sqlalchemy_easy_softdelete.handler.sqlalchemy_easy_softdelete import activate_soft_delete_hook
@@ -15,11 +14,11 @@ def generate_soft_delete_mixin_class(
     deleted_field_name: str = "deleted_at",
     ignored_tables: list[IgnoredTable] | None = None,
     class_name: str = "_SoftDeleteMixin",
-    deleted_field_type: TypeEngine = DateTime(timezone=True),
+    deleted_field_type: TypeEngine = Boolean,
     disable_soft_delete_filtering_option_name: str = "include_deleted",
     generate_delete_method: bool = True,
     delete_method_name: str = "delete",
-    delete_method_default_value: Callable[[], Any] = lambda: datetime.utcnow(),
+    delete_method_default_value: Callable[[], Any] = lambda: True,
     generate_undelete_method: bool = True,
     undelete_method_name: str = "undelete",
 ) -> Type:
