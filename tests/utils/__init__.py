@@ -1,4 +1,5 @@
-from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList, Null
+from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList, True_
+from sqlalchemy.sql.operators import is_not
 from sqlalchemy.sql.schema import Table
 from sqlalchemy.sql.selectable import Select
 
@@ -20,7 +21,12 @@ def extract_binary_expressions_from_where(whereclause) -> tuple[BinaryExpression
 
 
 def is_soft_delete_filter(b: BinaryExpression, tables: list[Table], deleted_field: str):
-    return b.left.table in tables and b.left.name == deleted_field and isinstance(b.right, Null)
+    return (
+        b.left.table in tables
+        and b.left.name == deleted_field
+        and isinstance(b.right, True_)
+        and b.operator == is_not
+    )
 
 
 def is_simple_select_doing_soft_delete_filtering(stmt: Select, tables: set[Table], deleted_field: str) -> bool:
