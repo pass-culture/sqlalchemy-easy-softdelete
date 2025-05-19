@@ -14,6 +14,8 @@ from sqlalchemy_easy_softdelete.hook import IgnoredTable
 
 Statement = TypeVar('Statement', bound=Union[Select, FromStatement, CompoundSelect, Executable])
 
+EnabledTable = IgnoredTable
+
 
 class SoftDeleteQueryRewriter:
     """Rewrites SQL statements based on configuration."""
@@ -23,6 +25,7 @@ class SoftDeleteQueryRewriter:
         deleted_field_name: str,
         disable_soft_delete_option_name: str,
         ignored_tables: list[IgnoredTable] | None = None,
+        enabled_tables: list[EnabledTable] | None = None,
     ):
         """
         Instantiate a new query rewriter.
@@ -40,6 +43,7 @@ class SoftDeleteQueryRewriter:
         """
         """List of table names that should be ignored from soft-deletion"""
         self.ignored_tables = ignored_tables or []
+        self.enabled_tables = enabled_tables or []
         self.deleted_field_name = deleted_field_name
         self.disable_soft_delete_option_name = disable_soft_delete_option_name
 
@@ -150,6 +154,9 @@ class SoftDeleteQueryRewriter:
         Ignore tables named like the ignore_tabl
 
         """
+        # Early return if enabled tables are set but none match the table
+        if self.enabled_tables and not any(enabled.match_name(table) for enabled in self.enabled_tables):
+            return stmt
         # Early return if the table is ignored
         if any(ignored.match_name(table) for ignored in self.ignored_tables):
             return stmt
