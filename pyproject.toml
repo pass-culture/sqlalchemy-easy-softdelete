@@ -37,7 +37,7 @@ virtualenv = "^20.2.2"
 pre-commit = "^2.12.0"
 bump2version = "^1.0.1"
 pip = "*"
-sqlparse = "^0.4.4"
+sqlparse = ">=0.4.4,<0.6.0"
 
 [tool.black]
 line-length = 120
