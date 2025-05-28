@@ -14,6 +14,8 @@ from sqlalchemy_easy_softdelete.hook import IgnoredTable
 
 Statement = TypeVar('Statement', bound=Union[Select, FromStatement, CompoundSelect, Executable])
 
+EnabledTable = IgnoredTable
+
 
 class SoftDeleteQueryRewriter:
     """Rewrites SQL statements based on configuration."""
@@ -23,6 +25,7 @@ class SoftDeleteQueryRewriter:
         deleted_field_name: str,
         disable_soft_delete_option_name: str,
         ignored_tables: list[IgnoredTable] | None = None,
+        enabled_tables: list[EnabledTable] | None = None,
     ):
         """
         Instantiate a new query rewriter.
@@ -40,6 +43,7 @@ class SoftDeleteQueryRewriter:
         """
         """List of table names that should be ignored from soft-deletion"""
         self.ignored_tables = ignored_tables or []
+        self.enabled_tables = enabled_tables or  []
         self.deleted_field_name = deleted_field_name
         self.disable_soft_delete_option_name = disable_soft_delete_option_name
 
@@ -60,7 +64,7 @@ class SoftDeleteQueryRewriter:
             stmt.element = self.rewrite_select(stmt.element)
             return stmt
 
-        raise NotImplementedError(f"Unsupported statement type \"{(type(stmt))}\"!")
+        raise NotImplementedError(f'Unsupported statement type "{(type(stmt))}"!')
 
     def rewrite_select(self, stmt: Select) -> Select:
         """Rewrite a Select Statement."""
@@ -79,30 +83,30 @@ class SoftDeleteQueryRewriter:
         # This needs to be done by array slice referencing instead of
         # a direct reassignment because the reassignment would not substitute the
         # value which is inside the CompoundSelect "by reference"
-        for i in range(len(stmt.selects)):
+        for i, _ in enumerate(stmt.selects):
             stmt.selects[i] = self.rewrite_select(stmt.selects[i])
         return stmt
 
-    def rewrite_element(self, subquery: Subquery) -> Subquery:
+    def rewrite_element(self, subquery: Subquery) -> None:
         """Rewrite an object with a `.element` attribute and patch the query inside it."""
         if isinstance(subquery.element, CompoundSelect):
             subquery.element = self.rewrite_compound_select(subquery.element)
-            return subquery
+            return
 
         if isinstance(subquery.element, Select):
             subquery.element = self.rewrite_select(subquery.element)
             return subquery
 
-        raise NotImplementedError(f"Unsupported object \"{(type(subquery.element))}\" in subquery.element")
+        raise NotImplementedError(f'Unsupported object "{(type(subquery.element))}" in subquery.element')
 
     def rewrite_from_orm_join(self, stmt: Select, join_obj: Union[_ORMJoin, Join]) -> Select:
         """Handle multiple, and potentially recursive joins."""
 
         # Recursive cases (multiple joins)
-        if isinstance(join_obj.left, _ORMJoin) or isinstance(join_obj.left, Join):
+        if isinstance(join_obj.left, (Join, _ORMJoin)):
             stmt = self.rewrite_from_orm_join(stmt, join_obj.left)
 
-        if isinstance(join_obj.right, _ORMJoin) or isinstance(join_obj.right, Join):
+        if isinstance(join_obj.right, (Join, _ORMJoin)):
             stmt = self.rewrite_from_orm_join(stmt, join_obj.right)
 
         # Normal cases - Tables
@@ -114,12 +118,12 @@ class SoftDeleteQueryRewriter:
 
         return stmt
 
-    def analyze_from(self, stmt: Select, from_obj):
+    def analyze_from(self, stmt: Select, from_obj) -> Statement:
         """Analyze the FROMS of a Select to determine possible soft-delete rewritable tables."""
         if isinstance(from_obj, Table):
             return self.rewrite_from_table(stmt, from_obj)
 
-        if isinstance(from_obj, _ORMJoin) or isinstance(from_obj, Join):
+        if isinstance(from_obj, (Join, _ORMJoin)):
             # _ORMJOIN/Join contains information about two things: 'left' and 'right'. Check both.
             return self.rewrite_from_orm_join(stmt, from_obj)
 
@@ -127,7 +131,7 @@ class SoftDeleteQueryRewriter:
             self.rewrite_element(from_obj)
             return stmt
 
-        if isinstance(from_obj, TableClause) or isinstance(from_obj, TextClause):
+        if isinstance(from_obj, (TableClause, TextClause)):
             # TableClause/TextClause objects are raw text SQL identifiers and as such, we cannot
             # introspect or do anything about this statement.
             return stmt
@@ -138,10 +142,10 @@ class SoftDeleteQueryRewriter:
                 return stmt
 
             raise NotImplementedError(
-                f"Unsupported object \"{(type(from_obj.element))}\" inside Alias in " f"statement.froms"
+                f'Unsupported object "{(type(from_obj.element))}" inside Alias in ' f"statement.froms"
             )
 
-        raise NotImplementedError(f"Unsupported object \"{(type(from_obj))}\" in statement.froms")
+        raise NotImplementedError(f'Unsupported object "{(type(from_obj))}" in statement.froms')
 
     def rewrite_from_table(self, stmt: Select, table: Table) -> Select:
         """
@@ -150,6 +154,9 @@ class SoftDeleteQueryRewriter:
         Ignore tables named like the ignore_tabl
 
         """
+        # Early return if enabled tables are set but none match the table
+        if self.enabled_tables and not any(enabled.match_name(table) for enabled in self.enabled_tables):
+            return stmt
         # Early return if the table is ignored
         if any(ignored.match_name(table) for ignored in self.ignored_tables):
             return stmt
@@ -164,4 +171,4 @@ class SoftDeleteQueryRewriter:
             return stmt
 
         # Column found. Rewrite the statement with a filter condition in the soft-delete column
-        return stmt.filter(column_obj.is_(None))
+        return stmt.filter(column_obj.is_(False))
