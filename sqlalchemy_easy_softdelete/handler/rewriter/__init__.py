@@ -87,11 +87,11 @@ class SoftDeleteQueryRewriter:
             stmt.selects[i] = self.rewrite_select(stmt.selects[i])
         return stmt
 
-    def rewrite_element(self, subquery: Subquery) -> Subquery:
+    def rewrite_element(self, subquery: Subquery) -> None:
         """Rewrite an object with a `.element` attribute and patch the query inside it."""
         if isinstance(subquery.element, CompoundSelect):
             subquery.element = self.rewrite_compound_select(subquery.element)
-            return subquery
+            return
 
         if isinstance(subquery.element, Select):
             subquery.element = self.rewrite_select(subquery.element)
