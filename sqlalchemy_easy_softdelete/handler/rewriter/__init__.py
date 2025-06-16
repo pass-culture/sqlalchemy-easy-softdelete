@@ -9,6 +9,7 @@ from sqlalchemy.orm import FromStatement
 from sqlalchemy.orm.util import _ORMJoin
 from sqlalchemy.sql import Alias, CompoundSelect, Executable, Join, Select, Subquery, TableClause
 from sqlalchemy.sql.elements import TextClause
+from sqlalchemy.sql.selectable import CTE
 
 from sqlalchemy_easy_softdelete.hook import IgnoredTable
 
@@ -148,6 +149,10 @@ class SoftDeleteQueryRewriter:
             raise NotImplementedError(
                 f'Unsupported object "{(type(from_obj.element))}" inside Alias in ' f"statement.froms"
             )
+
+        if isinstance(from_obj, CTE):
+            from_obj.element = self.rewrite_select(from_obj.element)
+            return stmt
 
         raise NotImplementedError(f'Unsupported object "{(type(from_obj))}" in statement.froms')
 
