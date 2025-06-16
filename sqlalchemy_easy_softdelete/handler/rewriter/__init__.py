@@ -141,6 +141,10 @@ class SoftDeleteQueryRewriter:
                 self.rewrite_element(from_obj.element)
                 return stmt
 
+            if isinstance(from_obj.element, Table):
+                # TODO: consider adding filter on the table
+                return stmt
+
             raise NotImplementedError(
                 f'Unsupported object "{(type(from_obj.element))}" inside Alias in ' f"statement.froms"
             )
