@@ -9,7 +9,7 @@ from typing import Union
 
 from sqlalchemy.orm.util import _ORMJoin
 from sqlalchemy.sql.schema import Table
-from sqlalchemy.sql.selectable import CompoundSelect, Join, Select, SelectBase, Subquery
+from sqlalchemy.sql.selectable import Alias, CompoundSelect, CTE, Join, Select, SelectBase, Subquery
 
 
 def is_simple_join(j: Union[Join, _ORMJoin]) -> bool:
@@ -17,10 +17,14 @@ def is_simple_join(j: Union[Join, _ORMJoin]) -> bool:
 
     if isinstance(j.left, Table):
         left_simple = True
+    elif isinstance(j.left, Alias) and isinstance(j.left.element, Table):
+        left_simple = True
     elif isinstance(j.left, _ORMJoin) or isinstance(j.left, Join):
         left_simple = is_simple_join(j.left)
 
     if isinstance(j.right, Table):
+        right_simple = True
+    elif isinstance(j.right, Alias) and isinstance(j.right.element, Table):
         right_simple = True
     elif isinstance(j.right, _ORMJoin) or isinstance(j.right, Join):
         right_simple = is_simple_join(j.right)
@@ -42,11 +46,15 @@ def is_simple_select(s: Union[Select, Subquery, CompoundSelect]) -> bool:
     for from_obj in final_froms:
         if isinstance(from_obj, Table):
             continue
+        elif isinstance(from_obj, Alias) and isinstance(from_obj.element, Table):
+            continue
         elif isinstance(from_obj, Subquery):
             return False
         elif isinstance(from_obj, _ORMJoin) or isinstance(from_obj, Join):
             if is_simple_join(from_obj):
                 continue
+            return False
+        elif isinstance(from_obj, CTE):
             return False
         else:
             raise NotImplementedError(f"Unsupported froms type \"{(type(from_obj))}\"!")
@@ -68,6 +76,8 @@ def extract_simple_selects(statement: Select | CompoundSelect | SelectBase) -> l
         if isinstance(from_obj, Table):
             continue
         elif isinstance(from_obj, Subquery):
+            return extract_simple_selects(from_obj.element)
+        elif isinstance(from_obj, CTE):
             return extract_simple_selects(from_obj.element)
 
     raise NotImplementedError(f"Should not reach this point! statement.froms -> \"{statement.froms}\"!")
