@@ -222,3 +222,81 @@ def test_query_with_same_field_as_softdelete_field_but_ignored(seeded_session, r
         )
         is False
     )
+
+
+def test_query_with_aliased_tables(seeded_session, rewriter):
+    """Test that a simple query with aliased tables does not fail"""
+
+    from sqlalchemy.orm import aliased
+
+    SDChildAlias = aliased(SDChild, name='child_alias')
+
+    test_query = seeded_session.query(SDChildAlias)
+
+    soft_deleted_rewritten_statement = rewriter.rewrite_statement(test_query.statement)
+
+    assert (
+        is_filtering_for_softdeleted(
+            soft_deleted_rewritten_statement,
+            {
+                SDChild.__table__,
+            },
+        )
+        is True
+    )
+
+
+@pytest.mark.xfail(reason="Could not make those aliased tables work with the current implementation")
+@pytest.mark.parametrize(
+    'child_alias, parent_alias',
+    [
+        (False, False),
+        (False, True),
+        (True, False),
+        (True, True),
+    ]
+)
+def test_query_with_aliased_and_joined_tables(child_alias, parent_alias, seeded_session, rewriter):
+    """Test that a query with aliased tables gets rewritten correctly"""
+
+    from sqlalchemy.orm import aliased
+
+    SDChildAlias = aliased(SDChild, name='child_alias')
+    SDParentAlias = aliased(SDParent, name='parent_alias')
+
+    SDChildClass = SDChildAlias if child_alias else SDChild
+    SDParentClass = SDParentAlias if parent_alias else SDParent
+    test_query = seeded_session.query(SDChildClass).join(SDParentClass)
+
+    soft_deleted_rewritten_statement = rewriter.rewrite_statement(test_query.statement)
+
+    assert (
+        is_filtering_for_softdeleted(
+            soft_deleted_rewritten_statement,
+            {
+                SDChild.__table__,
+                SDParent.__table__,
+            },
+        )
+        is True
+    )
+
+
+def test_query_with_cte(seeded_session, rewriter):
+    """Test that a query with a CTE gets rewritten correctly"""
+
+    cte = select(SDChild).cte('child_cte')
+
+    test_query = select(cte).where(cte.c.id > 0)
+
+    soft_deleted_rewritten_statement = rewriter.rewrite_statement(test_query)
+
+    assert (
+        is_filtering_for_softdeleted(
+            soft_deleted_rewritten_statement,
+            {
+                SDChild.__table__,
+            },
+        )
+        is True
+    )
